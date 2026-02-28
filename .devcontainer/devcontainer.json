@@ -1,0 +1,15 @@
+{
+  "name": "Shellcoder Lab",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-python.python"
+      ]
+    }
+  },
+  "postCreateCommand": "pip3 install pwntools"
+}
