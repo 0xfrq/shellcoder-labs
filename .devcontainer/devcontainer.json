@@ -1,15 +1,32 @@
 {
   "name": "Shellcoder Lab",
-  "build": {
-    "dockerfile": "Dockerfile"
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" },
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.11" }
   },
+  "forwardPorts": [7681],
+  "portsAttributes": {
+    "7681": {
+      "label": "Terminal Tunnel (WS)",
+      "onAutoForward": "notify",
+      "visibility": "public"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "bash .devcontainer/start-tunnel.sh &",
+  "remoteUser": "vscode",
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-vscode.cpptools",
         "ms-python.python"
       ]
+    },
+    "codespaces": {
+      "openFiles": [
+        "labs/chapter2-stack-overflow/README.md"
+      ]
     }
-  },
-  "postCreateCommand": "pip3 install pwntools"
+  }
 }

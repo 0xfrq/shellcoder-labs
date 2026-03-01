@@ -1,0 +1,59 @@
+# .github/workflows/wake-lab.yml
+#
+# Trigger this workflow externally to wake the Codespace and get the tunnel URL.
+#
+# Trigger via API:
+#   curl -X POST \
+#     -H "Authorization: Bearer $GITHUB_TOKEN" \
+#     -H "Accept: application/vnd.github+json" \
+#     https://api.github.com/repos/OWNER/REPO/actions/workflows/wake-lab.yml/dispatches \
+#     -d '{"ref":"main","inputs":{"tunnel_token":"optional-secret"}}'
+#
+# Or just press "Run workflow" in the GitHub Actions UI.
+
+name: Wake Lab Codespace
+
+on:
+  workflow_dispatch:
+    inputs:
+      tunnel_token:
+        description: "Optional auth token for the WebSocket tunnel"
+        required: false
+        default: ""
+      codespace_name:
+        description: "Codespace name (leave blank to auto-detect)"
+        required: false
+        default: ""
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Wake Codespace & get tunnel URL
+        env:
+          GITHUB_TOKEN: ${{ secrets.CODESPACE_PAT }}
+          TUNNEL_TOKEN: ${{ github.event.inputs.tunnel_token }}
+        run: |
+          ARGS="--repo ${{ github.repository }} --create"
+          if [ -n "${{ github.event.inputs.codespace_name }}" ]; then
+            ARGS="--name ${{ github.event.inputs.codespace_name }}"
+          fi
+          if [ -n "$TUNNEL_TOKEN" ]; then
+            ARGS="$ARGS --token $TUNNEL_TOKEN"
+          fi
+          python scripts/wake_and_tunnel.py $ARGS | tee /tmp/result.json
+
+      - name: Output tunnel URL
+        run: |
+          echo "## 🐚 Lab Terminal Ready" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          URL=$(python -c "import json; print(json.load(open('/tmp/result.json'))['tunnel_url'])" 2>/dev/null || echo "check logs")
+          echo "**Terminal URL:** $URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Open the URL above in your browser to get a shell into the lab environment." >> $GITHUB_STEP_SUMMARY

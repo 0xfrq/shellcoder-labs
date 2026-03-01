@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shellcoder Lab – Terminal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #0d1117; color: #c9d1d9; font-family: monospace; }
+
+    #header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px; background: #161b22; border-bottom: 1px solid #30363d;
+    }
+    #header h1 { font-size: 14px; font-weight: 600; }
+    #status {
+      font-size: 12px; padding: 2px 8px; border-radius: 12px;
+      background: #da3633; color: #fff;
+    }
+    #status.connected { background: #238636; }
+
+    #terminal-container {
+      flex: 1; height: calc(100vh - 42px); padding: 4px;
+    }
+
+    #reconnect-bar {
+      display: none; position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 10px; text-align: center;
+      background: rgba(218, 54, 51, 0.9); color: #fff; font-size: 13px;
+    }
+    #reconnect-bar button {
+      margin-left: 12px; padding: 4px 14px; border: none; border-radius: 4px;
+      background: #fff; color: #000; cursor: pointer; font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🐚 Shellcoder Lab</h1>
+  <span id="status">disconnected</span>
+</div>
+
+<div id="terminal-container"></div>
+
+<div id="reconnect-bar">
+  Connection lost.
+  <button onclick="connect()">Reconnect</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
+<script>
+  const statusEl     = document.getElementById("status");
+  const reconnectBar = document.getElementById("reconnect-bar");
+
+  const term = new window.Terminal({
+    cursorBlink: true,
+    fontSize: 14,
+    fontFamily: "'Cascadia Code', 'Fira Code', 'Menlo', monospace",
+    theme: {
+      background: "#0d1117",
+      foreground: "#c9d1d9",
+      cursor:     "#58a6ff",
+      selectionBackground: "rgba(56,139,253,0.4)",
+    },
+  });
+
+  const fitAddon = new window.FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
+  term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
+  term.open(document.getElementById("terminal-container"));
+  fitAddon.fit();
+
+  window.addEventListener("resize", () => fitAddon.fit());
+
+  let ws = null;
+
+  function wsUrl() {
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const params = new URLSearchParams(location.search);
+    const token  = params.get("token");
+    let url = `${proto}://${location.host}/ws`;
+    if (token) url += `?token=${encodeURIComponent(token)}`;
+    return url;
+  }
+
+  function connect() {
+    reconnectBar.style.display = "none";
+    statusEl.textContent = "connecting…";
+    statusEl.className   = "";
+
+    ws = new WebSocket(wsUrl());
+
+    ws.onopen = () => {
+      statusEl.textContent = "connected";
+      statusEl.className   = "connected";
+      // Send initial size
+      ws.send(JSON.stringify({
+        type: "resize",
+        cols: term.cols,
+        rows: term.rows,
+      }));
+    };
+
+    ws.onmessage = (ev) => {
+      term.write(ev.data);
+    };
+
+    ws.onclose = () => {
+      statusEl.textContent = "disconnected";
+      statusEl.className   = "";
+      reconnectBar.style.display = "block";
+    };
+
+    ws.onerror = () => {
+      ws.close();
+    };
+  }
+
+  // Terminal → WS
+  term.onData((data) => {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(data);
+  });
+
+  // Handle resize
+  term.onResize(({ cols, rows }) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "resize", cols, rows }));
+    }
+  });
+
+  // Auto‑connect on load
+  connect();
+</script>
+</body>
+</html>
