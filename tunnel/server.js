@@ -19,7 +19,30 @@ const pty       = require("node-pty");
 const PORT  = parseInt(process.env.TUNNEL_PORT || "7681", 10);
 const TOKEN = process.env.TUNNEL_TOKEN || "";       // optional auth
 const SHELL = process.env.SHELL || "/bin/bash";
-const CWD   = process.env.TUNNEL_CWD || "/workspaces/shellcoder-lab";
+
+// ── Resolve a working CWD (handles any repo name / mount point) ──────
+function resolveCwd() {
+  // 1. Explicit env override
+  if (process.env.TUNNEL_CWD && fs.existsSync(process.env.TUNNEL_CWD)) {
+    return process.env.TUNNEL_CWD;
+  }
+  // 2. Codespaces sets CODESPACE_VSCODE_FOLDER
+  if (process.env.CODESPACE_VSCODE_FOLDER && fs.existsSync(process.env.CODESPACE_VSCODE_FOLDER)) {
+    return process.env.CODESPACE_VSCODE_FOLDER;
+  }
+  // 3. Scan /workspaces/ for the first directory that exists
+  const wsRoot = "/workspaces";
+  if (fs.existsSync(wsRoot)) {
+    const entries = fs.readdirSync(wsRoot, { withFileTypes: true });
+    const dir = entries.find(e => e.isDirectory());
+    if (dir) return path.join(wsRoot, dir.name);
+  }
+  // 4. Fallback: home directory (always exists)
+  return process.env.HOME || "/home/vscode";
+}
+
+const CWD = resolveCwd();
+console.log(`[*] Resolved CWD: ${CWD}`);
 
 // ── Express: serve the browser client ────────────────────────────────
 const app = express();
@@ -43,11 +66,14 @@ wss.on("connection", (ws, req) => {
 
   console.log(`[+] New terminal session from ${req.socket.remoteAddress}`);
 
+  // Use CWD if it still exists, otherwise fall back to HOME
+  const sessionCwd = fs.existsSync(CWD) ? CWD : (process.env.HOME || "/tmp");
+
   const term = pty.spawn(SHELL, [], {
     name: "xterm-256color",
     cols: 120,
     rows: 30,
-    cwd: CWD,
+    cwd: sessionCwd,
     env: {
       ...process.env,
       TERM: "xterm-256color",
